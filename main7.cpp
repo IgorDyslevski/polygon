@@ -49,7 +49,7 @@ int put_marbles(std::vector<long long int>& weights, long long int k) {
     }
 }
 
-void test_time(int len) {
+void test_time(long long int len) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::vector<long long int> arr(len, 0);
