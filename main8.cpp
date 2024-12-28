@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <utility>
 #include <ctime>
-#include <unordered_map>
 #include <queue>
 
 
@@ -49,7 +48,7 @@ vector<string> split(const string& s, const string& delimiter = " ")
     return result;
 }
 
-string replacechar(const string& s, char oldchar, char newchar)
+string replace_char(const string& s, char oldchar, char newchar)
 {
     string result = s;
     for (auto &ch : result) {
@@ -109,7 +108,7 @@ struct Graph {
             }
             replace(line.begin(), line.end(), ':', ';');
             line = strip(line);
-            line = replacechar(line, ';', ' ');
+            line = replace_char(line, ';', ' ');
             vector<string> tokens = split(line);
             vector<string> tmp = split(tokens[0], ",");
             pair<double, double> from = {stod(tmp[1]), stod(tmp[0])};
@@ -135,25 +134,60 @@ struct Graph {
             }
         }
     }
-    void DFS_Recursive(map<Node*, bool>& visited, Node* start) {
+
+    vector<pair<Node*, double>> find_path_and_len(map<Node*, Node*>& parent, map<Node*, double>& edges_cost, Node* start, Node* goal) {
+        vector<Node*> path;
+        Node* current = goal;
+        while (current != start) {
+            path.push_back(current);
+            current = parent[current];
+        }
+        path.push_back(start);
+        reverse(path.begin(), path.end());
+        vector<pair<Node*, double>> result;
+        for (int i = 0; i < path.size(); i++) {
+            result.push_back({path[i], edges_cost[path[i]]});
+        }
+        return result;
+    }
+
+    vector<Node*> find_path(map<Node*, Node*>& parent, Node* start, Node* goal) {
+        vector<Node*> path;
+        Node* current = goal;
+        while (current != start) {
+            path.push_back(current);
+            current = parent[current];
+        }
+        path.push_back(start);
+        reverse(path.begin(), path.end());
+        return path;
+    }
+
+    void DFS_Recursive(map<Node*, bool>& visited, Node* start, map<Node*, Node*>& parent) {
         visited[start] = true;
         for (pair<Node*, double> neighbor : start->nodes) {
             if (!visited[neighbor.first]) {
-                DFS_Recursive(visited, neighbor.first);
+                parent[neighbor.first] = start;
+                DFS_Recursive(visited, neighbor.first, parent);
             }
         }
     }
  
-    void DFS(Node* start) {
+    vector<Node*> DFS(Node* start, Node* goal) {
         map<Node*, bool> visited;
+        map<Node*, Node*> parent;
+        parent[start] = nullptr;
         for (Node* node : nodes) {
             visited[node] = false;
         }
-        DFS_Recursive(visited, start);
+        DFS_Recursive(visited, start, parent);
+        return find_path(parent, start, goal);
     }
 
-    void BFS(Node* start) {
+    vector<Node*> BFS(Node* start, Node* goal) {
         map<Node*, bool> visited;
+        map<Node*, Node*> parent;
+        parent[start] = nullptr;
         for (Node* node : nodes) {
             visited[node] = false;
         }
@@ -165,16 +199,22 @@ struct Graph {
             q.pop();
             for (pair<Node*, double> u : v->nodes) {
                 if (!visited[u.first]) {
+                    parent[u.first] = v;
                     visited[u.first] = true;
                     q.push(u.first);
                 }
             }
         }
+        return find_path(parent, start, goal);
     }
 
 
-    double Dijkstra(Node* start, Node* goal) {
+    vector<pair<Node*, double>> Dijkstra(Node* start, Node* goal) {
         map<Node*, double> dist;
+        map<Node*, Node*> parent;
+        map<Node*, double> edges_cost;
+        parent[start] = nullptr;
+        edges_cost[start] = 0;
         for (Node* node : nodes) {
             dist[node] = numeric_limits<double>::infinity();
         }
@@ -190,20 +230,28 @@ struct Graph {
             for (pair<Node*, double> v : u.second->nodes) {
                 double new_dist = dist[u.second] + v.second;
                 if (new_dist < dist[v.first]) {
+                    parent[v.first] = u.second;
+                    edges_cost[v.first] = v.second;
                     dist[v.first] = new_dist;
                     pq.emplace(new_dist, v.first);
                 }
             }
         }
-        return dist[goal];
+        return find_path_and_len(parent, edges_cost, start, goal);
     } 
 
-    double Astar(Node* start, Node* goal) {
+    vector<pair<Node*, double>> Astar(Node* start, Node* goal) {
         map<Node*, double> dist;
         map<Node*, double> f;
+        map<Node*, Node*> parent;
+        map<Node*, double> edges_cost;
+        map<Node*, bool> closed;
+        parent[start] = nullptr;
+        edges_cost[start] = 0;
         for (Node* node : nodes) {
             dist[node] = numeric_limits<double>::infinity();
             f[node] = numeric_limits<double>::infinity();
+            closed[node] = false;
         }
         dist[start] = 0;
         f[start] = euclidean_distance({start->lat, start->lon}, {goal->lat, goal->lon});
@@ -213,19 +261,29 @@ struct Graph {
             pair<double, Node*> u = pq.top();
             pq.pop();
             if (u.second == goal) {
-                return u.first;
+                return find_path_and_len(parent, edges_cost, start, goal);
             }
+            if (closed[u.second]) {
+                continue;
+            }
+            closed[u.second] = true;
             for (pair<Node*, double> v : u.second->nodes) {
+                if (closed[v.first]) {
+                    continue;
+                }
                 double new_dist = dist[u.second] + v.second;
                 if (new_dist < dist[v.first]) {
+                    parent[v.first] = u.second;
+                    edges_cost[v.first] = v.second;
                     dist[v.first] = new_dist;
                     f[v.first] = euclidean_distance({v.first->lat, v.first->lon}, {goal->lat, goal->lon}) + new_dist;
                     pq.emplace(f[v.first], v.first);
                 }
             }
         }
-        return numeric_limits<double>::infinity();
+        return find_path_and_len(parent, edges_cost, start, goal);
     }
+
 };
 
 
@@ -236,31 +294,49 @@ int main() {
     graph.read_graph("spb_graph.txt");
     cout << graph.nodes.size() << "\n";
 
-    Node* start = graph.find_closest_node(59.885142, 30.368563);
-    Node* end = graph.find_closest_node(59.944082, 30.295603);
+    Node* start = graph.find_closest_node(59.884690, 30.367749);
+    Node* end = graph.find_closest_node(59.944134, 30.295449);
 
     cout << "Start: " << start->lat << " " << start->lon << "\n";
-    cout << "End: " << end->lat << " " << end->lon << "\n";
+    cout << "End: " << end->lat << " " << end->lon << "\n\n";
 
+    cout << "DFS\n";
     time_t time1 = clock();
-    graph.DFS(start);
+    vector<Node*> path = graph.DFS(start, end);
     time_t time2 = clock();
-    cout << "Time: " << (long double)(time2 - time1) / (long double)(CLOCKS_PER_SEC) << "\n";
+    cout << "DFS Path Len: " << path.size() << "\n";
+    cout << "DFS Time: " << (long double)(time2 - time1) / (long double)(CLOCKS_PER_SEC) << "\n\n";
 
+    cout << "BFS\n";
     time_t time3 = clock();
-    graph.BFS(start);
+    path = graph.BFS(start, end);
     time_t time4 = clock();
-    cout << "Time: " << (long double)(time4 - time3) / (long double)(CLOCKS_PER_SEC) << "\n";
+    cout << "BFS Path Len: " << path.size() << "\n";
+    cout << "BFS Time: " << (long double)(time4 - time3) / (long double)(CLOCKS_PER_SEC) << "\n\n";
     
+    cout << "Dijkstra\n";
     time_t time5 = clock();
-    cout << "Dijkstra: " << graph.Dijkstra(start, end) << "\n";
+    vector<pair<Node*, double>> path_and_len = graph.Dijkstra(start, end);
     time_t time6 = clock();
-    cout << "Time: " << (long double)(time6 - time5) / (long double)(CLOCKS_PER_SEC) << "\n";
+    double dist = 0;
+    for (pair<Node*, double> p : path_and_len) {
+        dist += p.second;
+    }
+    cout << "Dijkstra Path Len: " << path_and_len.size() << "\n";
+    cout << "Dijkstra Dist: " << dist << "\n";
+    cout << "Dijkstra Time: " << (long double)(time6 - time5) / (long double)(CLOCKS_PER_SEC) << "\n\n";
 
+    cout << "Astar\n";
     time_t time7 = clock();
-    cout << "Astar: " << graph.Astar(start, end) << "\n";
+    path_and_len = graph.Astar(start, end);
     time_t time8 = clock();
-    cout << "Time: " << (long double)(time8 - time7) / (long double)(CLOCKS_PER_SEC) << "\n";
+    dist = 0;
+    for (pair<Node*, double> p : path_and_len) {
+        dist += p.second;
+    }
+    cout << "Astar Path Len: " << path_and_len.size() << "\n";
+    cout << "Astar Dist: " << dist << "\n";
+    cout << "Astar Time: " << (long double)(time8 - time7) / (long double)(CLOCKS_PER_SEC) << "\n\n";
     return 0;
 
 }
