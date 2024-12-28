@@ -1,0 +1,22 @@
+347333
+Start: 59.884937 30.3677841
+End: 59.9443927 30.2953995
+
+DFS
+DFS Path Len: 29184
+DFS Time: 0.884423
+
+BFS
+BFS Path Len: 105
+BFS Time: 0.986601
+
+Dijkstra
+Dijkstra Path Len: 206
+Dijkstra Dist: 0.1129958603
+Dijkstra Time: 2.092925
+
+Astar
+Astar Path Len: 206
+Astar Dist: 0.1129958603
+Astar Time: 0.726925
+
